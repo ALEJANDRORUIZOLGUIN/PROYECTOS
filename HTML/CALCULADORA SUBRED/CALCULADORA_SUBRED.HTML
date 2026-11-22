@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculadora de subredes IPv4</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --text: #1d2433;
+    --muted: #5c6678;
+    --border: #d9dee8;
+    --accent: #2563eb;
+    --accent-text: #ffffff;
+    --net: #16a34a;
+    --host: #64748b;
+    --bcast: #dc2626;
+    --error: #b91c1c;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1420;
+      --surface: #171e2e;
+      --text: #e6eaf2;
+      --muted: #9aa5b8;
+      --border: #2a3448;
+      --accent: #3b82f6;
+      --accent-text: #ffffff;
+      --net: #4ade80;
+      --host: #94a3b8;
+      --bcast: #f87171;
+      --error: #fca5a5;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1420;
+    --surface: #171e2e;
+    --text: #e6eaf2;
+    --muted: #9aa5b8;
+    --border: #2a3448;
+    --accent: #3b82f6;
+    --accent-text: #ffffff;
+    --net: #4ade80;
+    --host: #94a3b8;
+    --bcast: #f87171;
+    --error: #fca5a5;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    padding: env(safe-area-inset-top, 0px) 16px env(safe-area-inset-bottom, 0px);
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 0 40px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  form { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 560px) { form { grid-template-columns: 1fr; } }
+  label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    font: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+  .actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:hover { filter: brightness(1.05); }
+  .error {
+    color: var(--error);
+    font-weight: 600;
+    display: none;
+    margin-top: 2px;
+  }
+  .error.show { display: block; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; width: 40%; font-size: 0.92rem; }
+  td { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+  tr:last-child th, tr:last-child td { border-bottom: none; }
+  .bits { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; line-height: 1.9; }
+  .bits .n { color: var(--net); font-weight: 700; }
+  .bits .h { color: var(--host); }
+  .bits .b { color: var(--bcast); }
+  .legend { font-size: 0.85rem; color: var(--muted); margin-top: 10px; }
+  .legend span { font-weight: 700; }
+  .placeholder { color: var(--muted); text-align: center; padding: 24px 0; }
+  .pill {
+    display: inline-block;
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    margin-left: 6px;
+    font-family: system-ui, sans-serif;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Calculadora de subredes IPv4</h1>
+  <p class="sub">Ingresa una IP y una máscara para obtener la red, el rango de hosts y el broadcast.</p>
+
+  <section class="card">
+    <form id="form" novalidate>
+      <div>
+        <label for="ip">Dirección IP</label>
+        <input id="ip" type="text" placeholder="192.168.10.45" autocomplete="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="mask">Máscara</label>
+        <input id="mask" type="text" placeholder="/26, 26 o 255.255.255.192" autocomplete="off" spellcheck="false">
+        <div class="hint">Acepta prefijo (/26), número (26) o máscara decimal.</div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary">Calcular</button>
+        <button type="button" id="example">Usar ejemplo</button>
+        <button type="button" id="clear">Limpiar</button>
+      </div>
+      <div class="error" id="error" role="alert"></div>
+    </form>
+  </section>
+
+  <section class="card" id="results">
+    <div class="placeholder">Los resultados aparecerán aquí.</div>
+  </section>
+
+  <section class="card" id="binary-card" hidden>
+    <h2 style="font-size:1.05rem;margin:0 0 10px;">Vista binaria</h2>
+    <div class="bits" id="bits"></div>
+    <div class="legend">
+      <span style="color:var(--net)">Verde</span> = bits de red &nbsp;·&nbsp;
+      <span style="color:var(--host)">Gris</span> = bits de host &nbsp;·&nbsp;
+      <span style="color:var(--bcast)">Rojo</span> = bits de broadcast (host en 1)
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $("form"), ipIn = $("ip"), maskIn = $("mask");
+  var errorBox = $("error"), results = $("results");
+  var binaryCard = $("binary-card"), bitsBox = $("bits");
+
+  function parseIPv4(str) {
+    var parts = str.trim().split(".");
+    if (parts.length !== 4) return null;
+    var n = 0;
+    for (var i = 0; i < 4; i++) {
+      if (!/^\d{1,3}$/.test(parts[i])) return null;
+      var v = parseInt(parts[i], 10);
+      if (v > 255) return null;
+      n = (n * 256) + v;
+    }
+    return n >>> 0;
+  }
+
+  function toDotted(n) {
+    return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
+  }
+
+  function prefixToMask(p) {
+    return p === 0 ? 0 : ((0xFFFFFFFF << (32 - p)) >>> 0);
+  }
+
+  function maskToPrefix(mask) {
+    var p = 0;
+    for (var i = 31; i >= 0; i--) {
+      if ((mask >>> i) & 1) p++; else break;
+    }
+    var prefix = p;
+    for (i = p; i < 32; i++) {
+      if ((mask >>> i) & 1) return -1;
+    }
+    return prefixToMask(prefix) === mask ? prefix : -1;
+  }
+
+  function parseMask(str) {
+    var s = str.trim();
+    if (s === "") return { error: "Escribe una máscara." };
+    if (s.charAt(0) === "/") s = s.slice(1);
+
+    if (s.indexOf(".") !== -1) {
+      var m = parseIPv4(s);
+      if (m === null) return { error: "La máscara decimal no es válida." };
+      var p = maskToPrefix(m);
+      if (p < 0) return { error: "La máscara debe tener unos seguidos y luego ceros (ej. 255.255.255.192)." };
+      return { prefix: p, mask: m };
+    }
+
+    if (!/^\d{1,2}$/.test(s)) return { error: "El prefijo debe ser un número entre 0 y 32." };
+    var pref = parseInt(s, 10);
+    if (pref > 32) return { error: "El prefijo debe estar entre 0 y 32." };
+    return { prefix: pref, mask: prefixToMask(pref) };
+  }
+
+  function calculate(ipStr, maskStr) {
+    var ip = parseIPv4(ipStr);
+    if (ip === null) return { error: "La dirección IP no es válida (ej. 192.168.1.10)." };
+
+    var mk = parseMask(maskStr);
+    if (mk.error) return { error: mk.error };
+
+    var mask = mk.mask, prefix = mk.prefix;
+    var wildcard = (~mask) >>> 0;
+    var network = (ip & mask) >>> 0;
+    var broadcast = (network | wildcard) >>> 0;
+    var total = Math.pow(2, 32 - prefix);
+
+    var first, last, usable, note = "";
+    if (prefix <= 30) {
+      first = network + 1;
+      last = broadcast - 1;
+      usable = total - 2;
+    } else if (prefix === 31) {
+      first = network;
+      last = broadcast;
+      usable = 2;
+      note = "Enlace punto a punto (RFC 3021): ambas direcciones son utilizables.";
+    } else {
+      first = network;
+      last = network;
+      usable = 1;
+      note = "Host único (/32).";
+    }
+
+    var first4 = ip >>> 24;
+    var cls;
+    if (first4 < 128) cls = "A";
+    else if (first4 < 192) cls = "B";
+    else if (first4 < 224) cls = "C";
+    else if (first4 < 240) cls = "D (multicast)";
+    else cls = "E (experimental)";
+
+    return {
+      ip: ip,
+      prefix: prefix,
+      mask: mask,
+      wildcard: wildcard,
+      network: network,
+      broadcast: broadcast,
+      first: first,
+      last: last,
+      total: total,
+      usable: usable,
+      cls: cls,
+      note: note,
+      priv: isPrivate(network)
+    };
+  }
+
+  function isPrivate(n) {
+    var a = n >>> 24, b = (n >>> 16) & 255;
+    if (a === 10) return "Sí (10.0.0.0/8)";
+    if (a === 172 && b >= 16 && b <= 31) return "Sí (172.16.0.0/12)";
+    if (a === 192 && b === 168) return "Sí (192.168.0.0/16)";
+    return "No";
+  }
+
+  function row(label, value) {
+    return "<tr><th>" + label + "</th><td>" + value + "</td></tr>";
+  }
+
+  function fmtNum(n) {
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  function render(r) {
+    var html = "<table>";
+    html += row("Dirección de red", toDotted(r.network) + "<span class='pill'>/" + r.prefix + "</span>");
+    html += row("Máscara de subred", toDotted(r.mask));
+    html += row("Máscara wildcard", toDotted(r.wildcard));
+    html += row("Primer host", toDotted(r.first));
+    html += row("Último host", toDotted(r.last));
+    html += row("Broadcast", toDotted(r.broadcast));
+    html += row("Hosts utilizables", fmtNum(r.usable));
+    html += row("Total de direcciones", fmtNum(r.total));
+    html += row("Clase", r.cls);
+    html += row("Privada (RFC 1918)", r.priv);
+    html += row("Dirección ingresada", toDotted(r.ip));
+    html += "</table>";
+    if (r.note) html += "<p class='hint' style='margin:12px 0 0'>" + r.note + "</p>";
+    results.innerHTML = html;
+  }
+
+  function renderBits(r) {
+    var out = "";
+    out += colorize("IP      ", r.ip, r.prefix, "ip");
+    out += colorize("Máscara ", r.mask, r.prefix, "mask");
+    out += colorize("Red     ", r.network, r.prefix, "net");
+    out += colorize("Bcast   ", r.broadcast, r.prefix, "bc");
+    bitsBox.innerHTML = out;
+    binaryCard.hidden = false;
+  }
+
+  function toBits(n) {
+    var s = "";
+    for (var i = 31; i >= 0; i--) s += ((n >>> i) & 1);
+    return s;
+  }
+
+  function colorize(label, n, prefix, kind) {
+    var bits = toBits(n), html = "<div>" + label + " ";
+    for (var i = 0; i < 32; i++) {
+      var ch = bits.charAt(i);
+      var cls = i < prefix ? "n" : "h";
+      if (kind === "bc" && i >= prefix) cls = "b";
+      if (i > 0 && i % 8 === 0) html += " ";
+      html += "<span class='" + cls + "'>" + ch + "</span>";
+    }
+    return html + "</div>";
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.add("show");
+    results.innerHTML = "<div class='placeholder'>Corrige los datos para ver el resultado.</div>";
+    binaryCard.hidden = true;
+  }
+
+  function clearError() {
+    errorBox.textContent = "";
+    errorBox.classList.remove("show");
+  }
+
+  function run() {
+    clearError();
+    var r = calculate(ipIn.value, maskIn.value);
+    if (r.error) { showError(r.error); return; }
+    render(r);
+    renderBits(r);
+  }
+
+  form.addEventListener("submit", function (e) { e.preventEvent(); });
+
+  $("example").addEventListener("click", function () {
+    ipIn.value = "192.168.10.45";
+    maskIn.value = "/26";
+    run();
+  });
+
+  $("clear").addEventListener("click", function () {
+    ipIn.value = "";
+    maskIn.value = "";
+    clearError();
+    results.innerHTML = "<div class='placeholder'>Los resultados aparecerán aquí.</div>";
+    binaryCard.hidden = true;
+    ipIn.focus();
+  });
+})();
+</script>
+</body>
+</html>
